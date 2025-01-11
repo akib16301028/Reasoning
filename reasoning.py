@@ -16,7 +16,7 @@ def main():
 
             # Check if required columns exist
             if {'Remarks', 'Elapsed Time Count', 'Reasoning'}.issubset(df.columns):
-                # Group by 'Reasoning' and aggregate Remarks with corresponding Elapsed Time Count
+                # Group by 'Reasoning'
                 grouped_data = (
                     df.groupby('Reasoning', as_index=False)
                     .apply(lambda group: pd.DataFrame({
@@ -30,8 +30,14 @@ def main():
                 # Sort by Elapsed Time Count in descending order
                 grouped_data = grouped_data.sort_values(by='Elapsed Time Count', ascending=False)
 
-                st.write("### Grouped Data by Reasoning with Remarks and Elapsed Time Count:")
-                st.dataframe(grouped_data)
+                st.write("### Grouped Data by Reasoning with Separate Tables:")
+
+                # Display separate tables for each reasoning
+                unique_reasons = grouped_data['Reasoning'].unique()
+                for reason in unique_reasons:
+                    st.write(f"#### Reasoning: {reason}")
+                    reason_data = grouped_data[grouped_data['Reasoning'] == reason]
+                    st.dataframe(reason_data[['Remarks', 'Elapsed Time Count']])
 
                 # Option to download the grouped data
                 download_data = grouped_data.to_csv(index=False)
