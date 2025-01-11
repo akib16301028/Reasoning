@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 
+
 def main():
-    st.title("Group Remarks and Calculate Elapsed Time")
+    st.title("Group Remarks and Calculate Elapsed Time with Reasoning")
 
     # File upload
     uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
@@ -15,11 +16,17 @@ def main():
             st.dataframe(df)
 
             # Check if required columns exist
-            if {'Remarks', 'Elapsed Time Count'}.issubset(df.columns):
-                # Group by 'Remarks' and sum 'Elapsed Time Count'
-                grouped_data = df.groupby('Remarks', as_index=False)['Elapsed Time Count'].sum()
+            if {'Remarks', 'Elapsed Time Count', 'Reasoning'}.issubset(df.columns):
+                # Group by 'Remarks', aggregate elapsed time sum, and list reasoning values
+                grouped_data = (
+                    df.groupby('Remarks', as_index=False)
+                    .agg({
+                        'Elapsed Time Count': 'sum',
+                        'Reasoning': lambda x: ', '.join(sorted(set(x)))  # Combine unique reasoning values
+                    })
+                )
 
-                st.write("### Grouped Data with Elapsed Time Sum:")
+                st.write("### Grouped Data with Elapsed Time Sum and Reasoning:")
                 st.dataframe(grouped_data)
 
                 # Option to download the grouped data
@@ -27,13 +34,14 @@ def main():
                 st.download_button(
                     label="Download Grouped Data as CSV",
                     data=download_data,
-                    file_name="grouped_data.csv",
+                    file_name="grouped_data_with_reasoning.csv",
                     mime="text/csv"
                 )
             else:
-                st.error("The uploaded file must contain 'Remarks' and 'Elapsed Time Count' columns.")
+                st.error("The uploaded file must contain 'Remarks', 'Elapsed Time Count', and 'Reasoning' columns.")
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
+
 
 if __name__ == "__main__":
     main()
