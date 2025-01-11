@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-
 def main():
-    st.title("Group Remarks and Calculate Elapsed Time with Reasoning")
+    st.title("Group Reasoning and Display Corresponding Remarks with Elapsed Time")
 
     # File upload
     uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
@@ -17,16 +16,21 @@ def main():
 
             # Check if required columns exist
             if {'Remarks', 'Elapsed Time Count', 'Reasoning'}.issubset(df.columns):
-                # Group by 'Remarks', aggregate elapsed time sum, and list reasoning values
+                # Group by 'Reasoning' and aggregate Remarks with corresponding Elapsed Time Count
                 grouped_data = (
-                    df.groupby('Remarks', as_index=False)
-                    .agg({
-                        'Elapsed Time Count': 'sum',
-                        'Reasoning': lambda x: ', '.join(sorted(set(x)))  # Combine unique reasoning values
-                    })
+                    df.groupby('Reasoning', as_index=False)
+                    .apply(lambda group: pd.DataFrame({
+                        'Reasoning': [group['Reasoning'].iloc[0]] * len(group),
+                        'Remarks': group['Remarks'],
+                        'Elapsed Time Count': group['Elapsed Time Count']
+                    }))
+                    .reset_index(drop=True)
                 )
 
-                st.write("### Grouped Data with Elapsed Time Sum and Reasoning:")
+                # Sort by Elapsed Time Count in descending order
+                grouped_data = grouped_data.sort_values(by='Elapsed Time Count', ascending=False)
+
+                st.write("### Grouped Data by Reasoning with Remarks and Elapsed Time Count:")
                 st.dataframe(grouped_data)
 
                 # Option to download the grouped data
@@ -34,14 +38,13 @@ def main():
                 st.download_button(
                     label="Download Grouped Data as CSV",
                     data=download_data,
-                    file_name="grouped_data_with_reasoning.csv",
+                    file_name="grouped_data_by_reasoning.csv",
                     mime="text/csv"
                 )
             else:
                 st.error("The uploaded file must contain 'Remarks', 'Elapsed Time Count', and 'Reasoning' columns.")
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
-
 
 if __name__ == "__main__":
     main()
