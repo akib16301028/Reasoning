@@ -10,27 +10,24 @@ st.title("🔔 DC Disconnect Virtual Alarm Analyzer with Time Matching & Hourly 
 # Upload files
 uploaded_file_1 = st.file_uploader("📂 Upload DC Disconnect Virtual Alarm Excel (with Start/End Time)", type=["xlsx"])
 uploaded_file_2 = st.file_uploader("📂 Upload Node Alarms Excel (with Start/End Time)", type=["xlsx"])
-uploaded_file_3 = st.file_uploader("📂 Upload DC Disconnect Hourly Excel (Optional)", type=["xlsx"])
-uploaded_file_4 = st.file_uploader("📂 Upload Node Alarms Hourly Excel (Optional)", type=["xlsx"])
 
 if uploaded_file_1 and uploaded_file_2:
     # Read Excel files
     df1 = pd.read_excel(uploaded_file_1)
     df2 = pd.read_excel(uploaded_file_2)
 
-    # Clean column names (strip spaces and lowercase)
+    # Clean column names
     df1.columns = df1.columns.str.strip()
     df2.columns = df2.columns.str.strip()
 
-    # Show available columns to debug
     st.write("📊 DC Disconnect Columns:", df1.columns.tolist())
     st.write("📊 Node Alarms Columns:", df2.columns.tolist())
 
-    # Check necessary columns
+    # Validate necessary columns
     if not {'Site', 'Start Time', 'End Time'}.issubset(df1.columns):
-        st.error("⚠️ DC Disconnect Virtual Alarm file must have 'Site', 'Start Time', and 'End Time' columns.")
+        st.error("⚠️ DC Disconnect file must have 'Site', 'Start Time', and 'End Time'.")
     elif not {'Site', 'Node', 'Start Time', 'End Time'}.issubset(df2.columns):
-        st.error("⚠️ Node Alarms file must have 'Site', 'Node', 'Start Time', and 'End Time' columns.")
+        st.error("⚠️ Node Alarms file must have 'Site', 'Node', 'Start Time', and 'End Time'.")
     else:
         # Convert times
         df1['Start Time'] = pd.to_datetime(df1['Start Time'])
@@ -60,7 +57,7 @@ if uploaded_file_1 and uploaded_file_2:
         for alarm in ordered_alarms:
             result_df[alarm] = ''
 
-        # Matching logic
+        # Match alarms by site and time overlap
         for idx1, row1 in df1.iterrows():
             site1, start1, end1 = row1['Site'], row1['Start Time'], row1['End Time']
             matches = df2[
@@ -82,7 +79,7 @@ if uploaded_file_1 and uploaded_file_2:
         st.subheader("✅ Matched Alarms with Time Overlap")
         st.dataframe(result_df.style.applymap(highlight, subset=ordered_alarms))
 
-        # Excel download
+        # Excel export
         towrite = BytesIO()
         wb = Workbook()
         ws = wb.active
@@ -103,7 +100,6 @@ if uploaded_file_1 and uploaded_file_2:
                     cell.font = tick_font
                     cell.alignment = align_center
 
-        # Auto column width
         for col in ws.columns:
             max_len = max(len(str(cell.value)) if cell.value else 0 for cell in col) + 2
             ws.column_dimensions[col[0].column_letter].width = max_len
@@ -112,21 +108,14 @@ if uploaded_file_1 and uploaded_file_2:
         towrite.seek(0)
         st.download_button("⬇️ Download Highlighted Excel", towrite, file_name="Matched_Alarms.xlsx")
 
-        # Optional hourly trend
-        if uploaded_file_3 and uploaded_file_4:
-            df3 = pd.read_excel(uploaded_file_3)
-            df4 = pd.read_excel(uploaded_file_4)
-            df3.columns = df3.columns.str.strip()
-            df4.columns = df4.columns.str.strip()
-            if {'Start Time'}.issubset(df3.columns) and {'Start Time'}.issubset(df4.columns):
-                df3['Hour'] = pd.to_datetime(df3['Start Time']).dt.floor('H')
-                df4['Hour'] = pd.to_datetime(df4['Start Time']).dt.floor('H')
-                trend_dc = df3.groupby('Hour').size().reset_index(name='DC Disconnect Count')
-                trend_node = df4.groupby('Hour').size().reset_index(name='Node Alarm Count')
-                trend = pd.merge(trend_dc, trend_node, on='Hour', how='outer').fillna(0)
-                st.subheader("📈 Hourly Alarm Trend")
-                st.line_chart(trend.set_index('Hour'))
-            else:
-                st.warning("⚠️ Hourly files must contain 'Start Time' column.")
+        # Hourly trend chart
+        st.subheader("📈 Hourly Alarm Trend")
+        df1['Hour'] = df1['Start Time'].dt.floor('H')
+        df2['Hour'] = df2['Start Time'].dt.floor('H')
+        trend_dc = df1.groupby('Hour').size().reset_index(name='DC Disconnect Count')
+        trend_node = df2.groupby('Hour').size().reset_index(name='Node Alarm Count')
+        trend = pd.merge(trend_dc, trend_node, on='Hour', how='outer').fillna(0)
+        st.line_chart(trend.set_index('Hour'))
+
 else:
-    st.info("Please upload at least the first two Excel files.")
+    st.info("Please upload both Excel files.")
