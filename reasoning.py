@@ -27,14 +27,14 @@ if uploaded_file_1 and uploaded_file_2:
     elif not {'Site', 'Node', 'Start Time', 'End Time'}.issubset(df2.columns):
         st.error("⚠️ Node Alarms file must have 'Site', 'Node', 'Start Time', and 'End Time'.")
     else:
-        # Convert times
-        df1['Start Time'] = pd.to_datetime(df1['Start Time'])
-        df1['End Time'] = pd.to_datetime(df1['End Time'])
-        df2['Start Time'] = pd.to_datetime(df2['Start Time'])
-        df2['End Time'] = pd.to_datetime(df2['End Time'])
+        # Convert times, handle errors
+        df1['Start Time'] = pd.to_datetime(df1['Start Time'], errors='coerce')
+        df1['End Time'] = pd.to_datetime(df1['End Time'], errors='coerce')
+        df2['Start Time'] = pd.to_datetime(df2['Start Time'], errors='coerce')
+        df2['End Time'] = pd.to_datetime(df2['End Time'], errors='coerce')
 
         # Prepare alarm list
-        alarm_types = sorted(df2['Node'].unique())
+        alarm_types = sorted(df2['Node'].dropna().unique())
 
         # Initialize result dataframe with all columns from df1
         result_df = df1.copy()
@@ -46,6 +46,8 @@ if uploaded_file_1 and uploaded_file_2:
         # Populate alarm details
         for idx1, row1 in df1.iterrows():
             site1, start1, end1 = row1['Site'], row1['Start Time'], row1['End Time']
+            if pd.isna(site1) or pd.isna(start1) or pd.isna(end1):
+                continue  # Skip if crucial data is missing
             matching_alarms = df2[
                 (df2['Site'] == site1) &
                 (
@@ -58,7 +60,7 @@ if uploaded_file_1 and uploaded_file_2:
                 matches = matching_alarms[matching_alarms['Node'] == alarm]
                 if not matches.empty:
                     details = "\n".join([
-                        f"🕒 {row2['Start Time'].strftime('%Y-%m-%d %H:%M')} ➡ {row2['End Time'].strftime('%H:%M')}"
+                        f"🕒 {row2['Start Time'].strftime('%Y-%m-%d %H:%M') if pd.notna(row2['Start Time']) else 'Unknown'} ➡ {row2['End Time'].strftime('%H:%M') if pd.notna(row2['End Time']) else 'Unknown'}"
                         for _, row2 in matches.iterrows()
                     ])
                     result_df.at[idx1, alarm] = details
