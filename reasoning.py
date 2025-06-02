@@ -1,56 +1,58 @@
 import streamlit as st
 import pandas as pd
+from openpyxl import load_workbook
+from io import BytesIO
 
-def main():
-    st.title("Group Reasoning and Display Corresponding Remarks with Elapsed Time")
+# Streamlit App
+st.title("DC Disconnect Virtual Alarm Highlighter")
 
-    # File upload
-    uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
+# Upload first Excel (DC Disconnect Virtual Alarm)
+uploaded_file_1 = st.file_uploader("Upload DC Disconnect Virtual Alarm Excel", type=["xlsx"])
 
-    if uploaded_file is not None:
-        # Load the Excel file into a Pandas DataFrame
-        try:
-            df = pd.read_excel(uploaded_file)
-            st.write("### Uploaded Data:")
-            st.dataframe(df)
+# Upload second Excel (Node Alarms)
+uploaded_file_2 = st.file_uploader("Upload Node Alarms Excel", type=["xlsx"])
 
-            # Check if required columns exist
-            if {'Remarks', 'Elapsed Time Count', 'Reasoning'}.issubset(df.columns):
-                # Group by 'Reasoning'
-                grouped_data = (
-                    df.groupby('Reasoning', as_index=False)
-                    .apply(lambda group: pd.DataFrame({
-                        'Reasoning': [group['Reasoning'].iloc[0]] * len(group),
-                        'Remarks': group['Remarks'],
-                        'Elapsed Time Count': group['Elapsed Time Count']
-                    }))
-                    .reset_index(drop=True)
-                )
+if uploaded_file_1 and uploaded_file_2:
+    # Read the Excel files into DataFrames
+    df1 = pd.read_excel(uploaded_file_1)
+    df2 = pd.read_excel(uploaded_file_2)
+    
+    # Normalize site names by stripping spaces
+    df1['Site'] = df1['Site'].str.strip()
+    df2['Site'] = df2['Site'].str.strip()
+    
+    # Get unique alarm names from the second Excel's 'Node' column
+    unique_alarms = df2['Node'].unique()
+    
+    # Initialize a result DataFrame based on the first Excel
+    result_df = df1.copy()
+    
+    for alarm in unique_alarms:
+        # Create a new column for each alarm, initially empty
+        result_df[alarm] = ''
+    
+    # Fill in the result DataFrame
+    for idx, row in result_df.iterrows():
+        site = row['Site']
+        matching_alarms = df2[df2['Site'] == site]['Node'].tolist()
+        for alarm in unique_alarms:
+            if alarm in matching_alarms:
+                result_df.at[idx, alarm] = '✅'
+    
+    # Display the result with conditional formatting
+    def highlight_alarms(val):
+        if val == '✅':
+            return 'background-color: lightgreen'
+        return ''
 
-                # Sort by Elapsed Time Count in descending order
-                grouped_data = grouped_data.sort_values(by='Elapsed Time Count', ascending=False)
+    st.write("Matched Sites with Alarm Highlights")
+    st.dataframe(result_df.style.applymap(highlight_alarms, subset=unique_alarms))
+    
+    # Optionally, allow downloading the result
+    towrite = BytesIO()
+    result_df.to_excel(towrite, index=False)
+    towrite.seek(0)
+    st.download_button("Download Result Excel", data=towrite, file_name="highlighted_result.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-                st.write("### Grouped Data by Reasoning with Separate Tables:")
-
-                # Display separate tables for each reasoning
-                unique_reasons = grouped_data['Reasoning'].unique()
-                for reason in unique_reasons:
-                    st.write(f"#### Reasoning: {reason}")
-                    reason_data = grouped_data[grouped_data['Reasoning'] == reason]
-                    st.dataframe(reason_data[['Remarks', 'Elapsed Time Count']])
-
-                # Option to download the grouped data
-                download_data = grouped_data.to_csv(index=False)
-                st.download_button(
-                    label="Download Grouped Data as CSV",
-                    data=download_data,
-                    file_name="grouped_data_by_reasoning.csv",
-                    mime="text/csv"
-                )
-            else:
-                st.error("The uploaded file must contain 'Remarks', 'Elapsed Time Count', and 'Reasoning' columns.")
-        except Exception as e:
-            st.error(f"An error occurred while processing the file: {e}")
-
-if __name__ == "__main__":
-    main()
+else:
+    st.warning("Please upload both Excel files to continue.")
