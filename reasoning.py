@@ -60,16 +60,25 @@ if uploaded_file_1 and uploaded_file_2:
                 matches = matching_alarms[matching_alarms['Node'] == alarm]
                 if not matches.empty:
                     details = "\n".join([
-                        f"🕒 {row2['Start Time'].strftime('%Y-%m-%d %H:%M') if pd.notna(row2['Start Time']) else 'Unknown'} ➡ {row2['End Time'].strftime('%H:%M') if pd.notna(row2['End Time']) else 'Unknown'}"
+                        f"{row2['Start Time'].strftime('%Y-%m-%d %H:%M') if pd.notna(row2['Start Time']) else 'Unknown'} ➡ {row2['End Time'].strftime('%H:%M') if pd.notna(row2['End Time']) else 'Unknown'}"
                         for _, row2 in matches.iterrows()
                     ])
                     result_df.at[idx1, alarm] = details
 
-        # Display result table
-        st.subheader("✅ Detailed Match Table with Alarm Times")
-        st.dataframe(result_df)
+        # Define highlight function
+        def highlight_matches(val):
+            if val != '':
+                return 'background-color: lightgreen'
+            return ''
 
-        # Optional Excel download
+        # Apply styling
+        styled_df = result_df.style.applymap(highlight_matches, subset=alarm_types)
+
+        # Display styled table
+        st.subheader("✅ Detailed Match Table with Alarm Times (Green for Matches)")
+        st.dataframe(styled_df, use_container_width=True)
+
+        # Optional Excel download (without formatting)
         towrite = BytesIO()
         result_df.to_excel(towrite, index=False, sheet_name='Detailed_Matches')
         towrite.seek(0)
