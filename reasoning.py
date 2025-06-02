@@ -23,18 +23,36 @@ if uploaded_file_1 and uploaded_file_2:
     df2['Site'] = df2['Site'].astype(str).str.strip()
     
     # Extract unique alarms from Node column
-    unique_alarms = sorted(df2['Node'].unique())
+    all_unique_alarms = sorted(df2['Node'].unique())
+    
+    # Define custom alarm order
+    custom_order = [
+        "DCDB-01 Primary Disconnect",
+        "DCDB-01 Critical Disconnect",
+        "Battery Low",
+        "Battery Critical",
+        "Mains Fail",
+        "Rectifier Module Fault",
+        "MDB Fault",
+        "PG Run",
+        "Vibration",
+        "Motion"
+    ]
+    
+    # Sort alarms: first custom order, then rest (excluding duplicates)
+    remaining_alarms = [alarm for alarm in all_unique_alarms if alarm not in custom_order]
+    ordered_alarms = custom_order + remaining_alarms
     
     # Initialize result DataFrame
     result_df = df1.copy()
-    for alarm in unique_alarms:
+    for alarm in ordered_alarms:
         result_df[alarm] = ''
     
     # Update the result DataFrame with matches
     for idx, row in result_df.iterrows():
         site = row['Site']
         matching_alarms = df2[df2['Site'] == site]['Node'].tolist()
-        for alarm in unique_alarms:
+        for alarm in ordered_alarms:
             if alarm in matching_alarms:
                 result_df.at[idx, alarm] = '✓'  # Light thin checkmark
     
@@ -45,7 +63,7 @@ if uploaded_file_1 and uploaded_file_2:
         return ''
     
     st.write("Matched Sites with Alarm Highlights")
-    st.dataframe(result_df.style.applymap(highlight_alarms, subset=unique_alarms))
+    st.dataframe(result_df.style.applymap(highlight_alarms, subset=ordered_alarms))
     
     # Prepare Excel with formatting
     towrite = BytesIO()
@@ -53,7 +71,7 @@ if uploaded_file_1 and uploaded_file_2:
     sheet = workbook.active
     
     # Write headers
-    headers = list(result_df.columns)
+    headers = list(df1.columns) + ordered_alarms
     sheet.append(headers)
     
     # Define styles
