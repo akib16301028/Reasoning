@@ -4,7 +4,7 @@ from datetime import timedelta
 import matplotlib.pyplot as plt
 import numpy as np
 
-st.title("📊 Power System Event Analysis")
+st.title("📊 Power System Event Duration Analysis")
 
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
@@ -34,9 +34,6 @@ if uploaded_file:
             last_3_days = [max_date - timedelta(days=i) for i in range(3)]
             df_filtered = df[df['Date'].isin(last_3_days)].copy()
             
-            # Create a combined date-hour column for plotting
-            df_filtered['Date_Hour'] = df_filtered['Date'].astype(str) + ' ' + df_filtered['Hour'].astype(str) + ':00'
-            
             # Group all events by type and hour to get total duration
             event_grouped = df_filtered.groupby(['Date', 'Hour', 'Node'])['Duration'].sum().unstack(fill_value=0)
             
@@ -44,7 +41,7 @@ if uploaded_file:
             event_types = df_filtered['Node'].unique()
             
             # Create visualization for each day
-            st.subheader("🔌 Power Event Duration Analysis (Last 3 Days)")
+            st.subheader("🔌 Event Duration Analysis (Last 3 Days)")
             
             for day in last_3_days:
                 st.markdown(f"### {day.strftime('%A, %Y-%m-%d')}")
@@ -98,14 +95,6 @@ if uploaded_file:
                                      f"{day_events[event].sum():.2f} hours")
                 
                 st.markdown("---")
-            
-            # Save to Excel
-            output_excel = pd.ExcelWriter("power_analysis.xlsx", engine='openpyxl')
-            event_grouped.to_excel(output_excel, sheet_name="Event Durations")
-            output_excel.close()
-            
-            with open("power_analysis.xlsx", "rb") as f:
-                st.download_button("⬇ Download Analysis Excel", f, file_name="power_system_analysis.xlsx")
 
     except Exception as e:
         st.error(f"⚠️ Error processing file: {e}")
