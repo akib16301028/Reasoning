@@ -1,98 +1,54 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-from io import BytesIO
-from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Alignment
+from datetime import timedelta
 
-st.title("🔔 DC Disconnect Virtual Alarm Detailed Alarm Match Report")
+st.title("📊 3-Day Hourly Alarm Trend Generator")
 
-# Upload files
-uploaded_file_1 = st.file_uploader("📂 Upload DC Disconnect Virtual Alarm Excel (with Start/End Time)", type=["xlsx"])
-uploaded_file_2 = st.file_uploader("📂 Upload Node Alarms Excel (with Start/End Time)", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-if uploaded_file_1 and uploaded_file_2:
-    # Read Excel files
-    df1 = pd.read_excel(uploaded_file_1)
-    df2 = pd.read_excel(uploaded_file_2)
+if uploaded_file:
+    try:
+        # Load the Excel file
+        df = pd.read_excel(uploaded_file)
 
-    # Clean column names
-    df1.columns = df1.columns.str.strip()
-    df2.columns = df2.columns.str.strip()
+        # Ensure required columns exist
+        required_columns = ['Start Time']
+        if not all(col in df.columns for col in required_columns):
+            st.error(f"Missing required column(s): {required_columns}")
+        else:
+            # Convert 'Start Time' to datetime
+            df['Start Time'] = pd.to_datetime(df['Start Time'], format="%m/%d/%Y %I:%M:%S %p", errors='coerce')
+            df = df.dropna(subset=['Start Time'])
 
-    st.write("📊 DC Disconnect Columns:", df1.columns.tolist())
-    st.write("📊 Node Alarms Columns:", df2.columns.tolist())
+            # Extract date and hour
+            df['Date'] = df['Start Time'].dt.date
+            df['Hour'] = df['Start Time'].dt.hour
 
-    if not {'Site', 'Start Time', 'End Time'}.issubset(df1.columns):
-        st.error("⚠️ DC Disconnect file must have 'Site', 'Start Time', and 'End Time'.")
-    elif not {'Site', 'Node', 'Start Time', 'End Time'}.issubset(df2.columns):
-        st.error("⚠️ Node Alarms file must have 'Site', 'Node', 'Start Time', and 'End Time'.")
-    else:
-        df1['Start Time'] = pd.to_datetime(df1['Start Time'], errors='coerce')
-        df1['End Time'] = pd.to_datetime(df1['End Time'], errors='coerce')
-        df2['Start Time'] = pd.to_datetime(df2['Start Time'], errors='coerce')
-        df2['End Time'] = pd.to_datetime(df2['End Time'], errors='coerce')
+            # Determine the latest date in data
+            max_date = df['Date'].max()
+            last_3_days = [max_date - timedelta(days=i) for i in range(3)]
 
-        alarm_types = sorted(df2['Node'].dropna().unique())
+            # Filter for the last 3 days
+            df_filtered = df[df['Date'].isin(last_3_days)]
 
-        result_df = df1.copy()
-        for alarm in alarm_types:
-            result_df[alarm] = ''
+            # Group and pivot
+            alarm_counts = df_filtered.groupby(['Date', 'Hour']).size().reset_index(name='Alarm Count')
+            pivot = alarm_counts.pivot(index='Date', columns='Hour', values='Alarm Count').fillna(0).astype(int)
+            pivot = pivot.reindex(columns=range(24), fill_value=0)  # Ensure 0-23 hours
 
-        for idx1, row1 in df1.iterrows():
-            site1, start1, end1 = row1['Site'], row1['Start Time'], row1['End Time']
-            if pd.isna(site1) or pd.isna(start1) or pd.isna(end1):
-                continue
-            matching_alarms = df2[
-                (df2['Site'] == site1) &
-                (
-                    ((df2['Start Time'] >= start1) & (df2['Start Time'] <= end1)) |
-                    ((df2['End Time'] >= start1) & (df2['End Time'] <= end1)) |
-                    ((df2['Start Time'] <= start1) & (df2['End Time'] >= end1))
-                )
-            ]
-            for alarm in alarm_types:
-                matches = matching_alarms[matching_alarms['Node'] == alarm]
-                if not matches.empty:
-                    details = "\n\n".join([  # Double space
-                        f"{row2['Start Time'].strftime('%Y-%m-%d %H:%M') if pd.notna(row2['Start Time']) else 'Unknown'} ➡ {row2['End Time'].strftime('%H:%M') if pd.notna(row2['End Time']) else 'Unknown'}"
-                        for _, row2 in matches.iterrows()
-                    ])
-                    result_df.at[idx1, alarm] = details
+            # Display result
+            st.subheader("📅 Hourly Alarm Count (Last 3 Days)")
+            st.dataframe(pivot)
 
-        st.subheader("✅ Detailed Match Table with Alarm Times (Green for Matches)")
-        
-        def highlight_matches(val):
-            return 'background-color: lightgreen' if val != '' else ''
-        
-        styled_df = result_df.style.applymap(highlight_matches, subset=alarm_types)
-        st.dataframe(styled_df, use_container_width=True)
+            # Download as Excel
+            output_excel = pd.ExcelWriter("alarm_trend.xlsx", engine='openpyxl')
+            pivot.to_excel(output_excel, index=True)
+            output_excel.close()
 
-        # Prepare Excel with formatting
-        output = BytesIO()
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Detailed_Matches"
+            with open("alarm_trend.xlsx", "rb") as f:
+                st.download_button("⬇ Download Excel", f, file_name="3_day_hourly_alarm_trend.xlsx")
 
-        # Write header
-        for col_num, col_name in enumerate(result_df.columns, 1):
-            ws.cell(row=1, column=col_num, value=col_name)
-
-        # Write data with formatting
-        green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
-        center_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
-
-        for row_num, row_data in enumerate(result_df.itertuples(index=False), 2):
-            for col_num, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_num, value=value)
-                cell.alignment = center_align
-                if col_num > len(df1.columns) and value != '':
-                    cell.fill = green_fill
-
-        wb.save(output)
-        output.seek(0)
-
-        st.download_button("⬇️ Download Excel with Green Highlights", output, file_name="Detailed_Alarm_Report.xlsx")
-
+    except Exception as e:
+        st.error(f"⚠️ Error processing file: {e}")
 else:
-    st.info("Please upload both Excel files.")
+    st.info("Please upload an Excel file to begin.")
