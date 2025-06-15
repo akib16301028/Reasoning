@@ -59,23 +59,32 @@ if uploaded_file:
                 st.markdown(f"### {day.strftime('%A, %Y-%m-%d')}")
                 
                 # Filter data for this day
-                day_power = power_grouped.loc[day]
+                day_power = power_grouped.loc[day].reset_index()
                 day_outage = outage_grouped[outage_grouped['Date'] == day]
                 
                 # Create figure with secondary y-axis
-                fig, ax1 = plt.subplots(figsize=(14, 7))
+                fig, ax1 = plt.subplots(figsize=(16, 8))
                 
-                # Plot power events as stacked bars (duration)
-                day_power.plot(kind='bar', stacked=True, ax=ax1, 
-                              color=['#FF6B6B', '#4ECDC4', '#45B7D1'], 
-                              width=0.8, position=0)
+                # Set width and positions for side-by-side bars
+                bar_width = 0.25
+                positions = np.arange(24)
+                
+                # Plot each power event as separate bars
+                for i, event in enumerate(power_events):
+                    ax1.bar(
+                        positions + (i * bar_width), 
+                        day_power[event], 
+                        width=bar_width, 
+                        label=event,
+                        color=['#FF6B6B', '#4ECDC4', '#45B7D1'][i]
+                    )
                 
                 ax1.set_ylabel('Duration (Hours)', color='#333333')
                 ax1.set_xlabel('Hour of Day')
-                ax1.set_xticks(range(0, 24))
-                ax1.set_xticklabels(range(0, 24), rotation=0)
+                ax1.set_xticks(positions + bar_width)
+                ax1.set_xticklabels(range(24))
                 ax1.grid(axis='y', linestyle='--', alpha=0.7)
-                ax1.set_ylim(0, max(day_power.sum(axis=1).max() * 1.2, 1))
+                ax1.set_ylim(0, max(day_power[power_events].max().max() * 1.2, 1))
                 
                 # Create second y-axis for outage count
                 ax2 = ax1.twinx()
@@ -104,14 +113,12 @@ if uploaded_file:
                 st.pyplot(fig)
                 
                 # Display summary statistics
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Mains Fail Duration", 
-                             f"{day_power['Mains Fail'].sum():.2f} hours")
-                with col2:
-                    st.metric("Total PG Run Duration", 
-                             f"{day_power['PG Run'].sum():.2f} hours")
-                with col3:
+                cols = st.columns(len(power_events) + 1)
+                for i, event in enumerate(power_events):
+                    with cols[i]:
+                        st.metric(f"Total {event} Duration", 
+                                 f"{day_power[event].sum():.2f} hours")
+                with cols[-1]:
                     st.metric("Total Outage Events", 
                              f"{day_outage['Count'].sum() if not day_outage.empty else 0}")
                 
