@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import timedelta
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 st.title("📊 3-Day Hourly Alarm Breakdown")
 
@@ -37,6 +39,66 @@ if uploaded_file:
             # Display result
             st.subheader("📅 Hourly Alarm Breakdown by Type (Last 3 Days)")
             st.dataframe(pivot)
+
+            # Graphical Representation Section
+            st.subheader("📈 Graphical Representation")
+            
+            # Option to select visualization type
+            viz_type = st.selectbox("Select Visualization Type", 
+                                   ["Line Chart", "Bar Chart", "Heatmap"])
+            
+            # Reset index for plotting
+            plot_df = pivot.reset_index()
+            plot_df['Date'] = pd.to_datetime(plot_df['Date'])
+            plot_df['Date_Hour'] = plot_df['Date'].astype(str) + ' ' + plot_df['Hour'].astype(str) + ':00'
+            
+            if viz_type == "Line Chart":
+                st.write("### Alarm Trends Over Time")
+                fig, ax = plt.subplots(figsize=(12, 6))
+                for node in pivot.columns.get_level_values(0).unique():
+                    if node not in ['Date', 'Hour']:
+                        ax.plot(plot_df['Date_Hour'], plot_df[node], label=node)
+                plt.xticks(rotation=45)
+                plt.xlabel('Date & Hour')
+                plt.ylabel('Alarm Count')
+                plt.title('Hourly Alarm Count by Type')
+                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+            elif viz_type == "Bar Chart":
+                st.write("### Hourly Alarm Distribution")
+                selected_date = st.selectbox("Select Date to View", plot_df['Date'].dt.date.unique())
+                date_df = plot_df[plot_df['Date'].dt.date == selected_date]
+                
+                fig, ax = plt.subplots(figsize=(12, 6))
+                date_df.set_index('Hour').drop(['Date', 'Date_Hour'], axis=1).plot(kind='bar', stacked=True, ax=ax)
+                plt.xlabel('Hour of Day')
+                plt.ylabel('Alarm Count')
+                plt.title(f'Alarm Distribution by Hour on {selected_date}')
+                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+            elif viz_type == "Heatmap":
+                st.write("### Alarm Heatmap by Hour and Type")
+                # Select top N alarm types to show
+                top_n = st.slider("Select number of top alarm types to display", 3, 15, 5)
+                
+                # Get top alarm types by total count
+                alarm_totals = plot_df.drop(['Date', 'Hour', 'Date_Hour'], axis=1).sum().sort_values(ascending=False)
+                top_alarms = alarm_totals.head(top_n).index.tolist()
+                
+                # Prepare data for heatmap
+                heatmap_data = plot_df.set_index(['Date', 'Hour'])[top_alarms]
+                
+                fig, ax = plt.subplots(figsize=(12, 8))
+                sns.heatmap(heatmap_data.T, cmap="YlOrRd", annot=True, fmt="d", linewidths=.5, ax=ax)
+                plt.title(f'Top {top_n} Alarm Types by Hour and Date')
+                plt.xlabel('Date & Hour')
+                plt.ylabel('Alarm Type')
+                plt.tight_layout()
+                st.pyplot(fig)
 
             # Save to Excel
             output_excel = pd.ExcelWriter("alarm_breakdown.xlsx", engine='openpyxl')
