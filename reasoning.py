@@ -34,6 +34,20 @@ if uploaded_file:
             last_3_days = [max_date - timedelta(days=i) for i in range(3)]
             df_filtered = df[df['Date'].isin(last_3_days)].copy()
             
+            # Display raw data table
+            st.subheader("📋 Raw Event Data")
+            st.dataframe(
+                df_filtered.sort_values('Start Time'),
+                column_config={
+                    "Start Time": "Start Time",
+                    "End Time": "End Time",
+                    "Node": "Event Type",
+                    "Duration": st.column_config.NumberColumn("Duration (hours)", format="%.2f")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
             # Group all events by type and hour to get total duration
             event_grouped = df_filtered.groupby(['Date', 'Hour', 'Node'])['Duration'].sum().unstack(fill_value=0)
             
@@ -41,7 +55,7 @@ if uploaded_file:
             event_types = df_filtered['Node'].unique()
             
             # Create visualization for each day
-            st.subheader("🔌 Event Duration Analysis (Last 3 Days)")
+            st.subheader("📈 Event Duration Analysis (Last 3 Days)")
             
             for day in last_3_days:
                 st.markdown(f"### {day.strftime('%A, %Y-%m-%d')}")
