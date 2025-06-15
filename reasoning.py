@@ -10,7 +10,7 @@ uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 if uploaded_file:
     try:
-        # ✅ Load Excel, taking column headers from Row 1
+        # Load Excel
         df = pd.read_excel(uploaded_file)
 
         required_columns = ['Start Time', 'Node']
@@ -35,68 +35,49 @@ if uploaded_file:
 
             # Pivot to show Node (alarm type) as columns
             pivot = grouped.pivot_table(index=['Date', 'Hour'], columns='Node', values='Alarm Count', fill_value=0)
-
+            
             # Display result
             st.subheader("📅 Hourly Alarm Breakdown by Type (Last 3 Days)")
             st.dataframe(pivot)
 
-            # Graphical Representation Section
-            st.subheader("📈 Graphical Representation")
+            # Graphical Representation - Separate Graphs for Each Day
+            st.subheader("📈 Daily Hourly Alarm Trends")
             
-            # Option to select visualization type
-            viz_type = st.selectbox("Select Visualization Type", 
-                                   ["Line Chart", "Bar Chart", "Heatmap"])
+            # Get unique dates
+            unique_dates = grouped['Date'].unique()
             
-            # Reset index for plotting
-            plot_df = pivot.reset_index()
-            plot_df['Date'] = pd.to_datetime(plot_df['Date'])
-            plot_df['Date_Hour'] = plot_df['Date'].astype(str) + ' ' + plot_df['Hour'].astype(str) + ':00'
+            # Select alarm types to display
+            all_alarms = grouped['Node'].unique()
+            selected_alarms = st.multiselect(
+                "Select alarm types to display",
+                options=all_alarms,
+                default=all_alarms[:min(5, len(all_alarms))]  # Show first 5 by default
+            )
             
-            if viz_type == "Line Chart":
-                st.write("### Alarm Trends Over Time")
+            # Create a separate graph for each day
+            for day in unique_dates:
+                st.markdown(f"### {day.strftime('%A, %Y-%m-%d')}")
+                
+                # Filter data for this day
+                day_data = grouped[(grouped['Date'] == day) & (grouped['Node'].isin(selected_alarms))]
+                
+                # Create figure
                 fig, ax = plt.subplots(figsize=(12, 6))
-                for node in pivot.columns.get_level_values(0).unique():
-                    if node not in ['Date', 'Hour']:
-                        ax.plot(plot_df['Date_Hour'], plot_df[node], label=node)
-                plt.xticks(rotation=45)
-                plt.xlabel('Date & Hour')
-                plt.ylabel('Alarm Count')
-                plt.title('Hourly Alarm Count by Type')
-                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-                plt.tight_layout()
-                st.pyplot(fig)
                 
-            elif viz_type == "Bar Chart":
-                st.write("### Hourly Alarm Distribution")
-                selected_date = st.selectbox("Select Date to View", plot_df['Date'].dt.date.unique())
-                date_df = plot_df[plot_df['Date'].dt.date == selected_date]
+                # Plot each selected alarm type
+                for alarm in selected_alarms:
+                    alarm_data = day_data[day_data['Node'] == alarm]
+                    ax.plot(alarm_data['Hour'], alarm_data['Alarm Count'], 
+                            marker='o', label=alarm)
                 
-                fig, ax = plt.subplots(figsize=(12, 6))
-                date_df.set_index('Hour').drop(['Date', 'Date_Hour'], axis=1).plot(kind='bar', stacked=True, ax=ax)
-                plt.xlabel('Hour of Day')
-                plt.ylabel('Alarm Count')
-                plt.title(f'Alarm Distribution by Hour on {selected_date}')
-                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-                plt.tight_layout()
-                st.pyplot(fig)
+                # Customize plot
+                ax.set_xlabel('Hour of Day')
+                ax.set_ylabel('Alarm Count')
+                ax.set_title(f'Hourly Alarm Counts on {day.strftime("%Y-%m-%d")}')
+                ax.set_xticks(range(0, 24))
+                ax.grid(True, linestyle='--', alpha=0.7)
+                ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
                 
-            elif viz_type == "Heatmap":
-                st.write("### Alarm Heatmap by Hour and Type")
-                # Select top N alarm types to show
-                top_n = st.slider("Select number of top alarm types to display", 3, 15, 5)
-                
-                # Get top alarm types by total count
-                alarm_totals = plot_df.drop(['Date', 'Hour', 'Date_Hour'], axis=1).sum().sort_values(ascending=False)
-                top_alarms = alarm_totals.head(top_n).index.tolist()
-                
-                # Prepare data for heatmap
-                heatmap_data = plot_df.set_index(['Date', 'Hour'])[top_alarms]
-                
-                fig, ax = plt.subplots(figsize=(12, 8))
-                sns.heatmap(heatmap_data.T, cmap="YlOrRd", annot=True, fmt="d", linewidths=.5, ax=ax)
-                plt.title(f'Top {top_n} Alarm Types by Hour and Date')
-                plt.xlabel('Date & Hour')
-                plt.ylabel('Alarm Type')
                 plt.tight_layout()
                 st.pyplot(fig)
 
