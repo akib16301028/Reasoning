@@ -8,8 +8,8 @@ uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 if uploaded_file:
     try:
-        # Load Excel with correct header row (row 3 = header=2)
-        df = pd.read_excel(uploaded_file, header=2)
+        # ✅ Load Excel, taking column headers from Row 1
+        df = pd.read_excel(uploaded_file)
 
         required_columns = ['Start Time', 'Node']
         if not all(col in df.columns for col in required_columns):
