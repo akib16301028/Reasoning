@@ -50,3 +50,4 @@ if uploaded_file:
         st.error(f"⚠️ Error processing file: {e}")
 else:
     st.info("Please upload an Excel file to begin.")
+ 
