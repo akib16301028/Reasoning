@@ -24,25 +24,26 @@ if uploaded_file:
             # Calculate duration
             df['Duration (Hours)'] = (df['End Time'] - df['Start Time']).dt.total_seconds() / 3600
 
-            # Add Start Date column
+            # Add Start Date and Hour columns
             df['Start Date'] = df['Start Time'].dt.date
+            df['Hour'] = df['Start Time'].dt.hour
 
-            # Display data
+            # Display processed data
             st.subheader("📋 All Event Records")
             st.dataframe(
-                df[['Start Date', 'Start Time', 'End Time', 'Node', 'Duration (Hours)']].sort_values('Start Time'),
+                df[['Start Date', 'Hour', 'Start Time', 'End Time', 'Node', 'Duration (Hours)']].sort_values('Start Time'),
                 use_container_width=True,
                 hide_index=True
             )
 
-            # Download button
+            # Download processed data
             output = BytesIO()
             df.to_excel(output, index=False, sheet_name='Event Data')
             output.seek(0)
             st.download_button(
-                label="📥 Download Full Processed Excel",
+                label="📥 Download Processed Excel File",
                 data=output,
-                file_name="all_power_event_data.xlsx",
+                file_name="event_data_with_hour.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
