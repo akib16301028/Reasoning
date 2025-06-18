@@ -21,14 +21,18 @@ if uploaded_file:
             df['End Time'] = pd.to_datetime(df['End Time'], errors='coerce')
             df = df.dropna(subset=['Start Time', 'End Time'])
 
-            # Calculate duration
+            # Duration calculation
             df['Duration (Hours)'] = (df['End Time'] - df['Start Time']).dt.total_seconds() / 3600
 
-            # Add Start Date and Hour columns
-            df['Start Date'] = df['Start Time'].dt.date
+            # Add formatted Start Date and Hour
+            try:
+                df['Start Date'] = df['Start Time'].dt.strftime('%-d-%B, %Y')  # Linux/Mac
+            except:
+                df['Start Date'] = df['Start Time'].dt.strftime('%#d-%B, %Y')  # Windows fallback
+
             df['Hour'] = df['Start Time'].dt.hour
 
-            # Display processed data
+            # Display
             st.subheader("📋 All Event Records")
             st.dataframe(
                 df[['Start Date', 'Hour', 'Start Time', 'End Time', 'Node', 'Duration (Hours)']].sort_values('Start Time'),
@@ -36,7 +40,7 @@ if uploaded_file:
                 hide_index=True
             )
 
-            # Download processed data
+            # Download
             output = BytesIO()
             df.to_excel(output, index=False, sheet_name='Event Data')
             output.seek(0)
