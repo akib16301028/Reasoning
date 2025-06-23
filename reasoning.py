@@ -1,57 +1,74 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-from io import BytesIO
 
-st.title("📊 Power System Event Duration Table")
+st.title("🔁 Virtual vs All Alarm Matcher")
 
-uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
+# File uploaders
+virtual_file = st.file_uploader("Upload Virtual Alarm Excel file", type=["xlsx"], key="virtual")
+all_file = st.file_uploader("Upload All Alarm Excel file", type=["xlsx"], key="all")
 
-if uploaded_file:
+# Required columns
+required_cols = ["Rms Station", "Site Alias", "Zone", "Node", "Cluster", "Tenant", "Start Time", "End Time"]
+
+def validate_columns(df, name):
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        st.error(f"❌ {name} file is missing columns: {', '.join(missing)}")
+        return False
+    return True
+
+# Run matching logic
+if virtual_file and all_file:
     try:
-        df = pd.read_excel(uploaded_file)
+        df_virtual = pd.read_excel(virtual_file)
+        df_all = pd.read_excel(all_file)
 
-        # Required columns check
-        required_columns = ['Start Time', 'End Time', 'Node']
-        if not all(col in df.columns for col in required_columns):
-            st.error(f"Missing required columns: {required_columns}")
-        else:
-            # Convert to datetime
-            df['Start Time'] = pd.to_datetime(df['Start Time'], errors='coerce')
-            df['End Time'] = pd.to_datetime(df['End Time'], errors='coerce')
-            df = df.dropna(subset=['Start Time', 'End Time'])
+        # Ensure datetime format
+        df_virtual["Start Time"] = pd.to_datetime(df_virtual["Start Time"])
+        df_virtual["End Time"] = pd.to_datetime(df_virtual["End Time"])
+        df_all["Start Time"] = pd.to_datetime(df_all["Start Time"])
+        df_all["End Time"] = pd.to_datetime(df_all["End Time"])
 
-            # Duration calculation
-            df['Duration (Hours)'] = (df['End Time'] - df['Start Time']).dt.total_seconds() / 3600
+        # Validate columns
+        if validate_columns(df_virtual, "Virtual Alarm") and validate_columns(df_all, "All Alarm"):
+            
+            matched_nodes = []
 
-            # Add formatted Start Date and Hour
-            try:
-                df['Start Date'] = df['Start Time'].dt.strftime('%-d-%B, %Y')  # Linux/Mac
-            except:
-                df['Start Date'] = df['Start Time'].dt.strftime('%#d-%B, %Y')  # Windows fallback
+            # Iterate through virtual alarm rows
+            for idx, v_row in df_virtual.iterrows():
+                site = v_row["Site Alias"]
+                start = v_row["Start Time"]
+                end = v_row["End Time"]
 
-            df['Hour'] = df['Start Time'].dt.hour
+                # Filter all_alarm for matching Site Alias and time within virtual time range
+                matched_rows = df_all[
+                    (df_all["Site Alias"] == site) &
+                    (df_all["Start Time"] >= start) &
+                    (df_all["Start Time"] <= end)
+                ]
 
-            # Display
-            st.subheader("📋 All Event Records")
-            st.dataframe(
-                df[['Start Date', 'Hour', 'Start Time', 'End Time', 'Node', 'Duration (Hours)']].sort_values('Start Time'),
-                use_container_width=True,
-                hide_index=True
-            )
+                # Get matching node names as comma-separated string
+                node_list = matched_rows["Node"].dropna().unique().tolist()
+                matched_nodes.append(", ".join(map(str, node_list)))
 
-            # Download
-            output = BytesIO()
-            df.to_excel(output, index=False, sheet_name='Event Data')
-            output.seek(0)
+            # Add to virtual df
+            df_virtual["Matched Nodes from All Alarm"] = matched_nodes
+
+            st.success("✅ Matching complete!")
+
+            with st.expander("📄 Result: Virtual Alarm with Matched Nodes"):
+                st.dataframe(df_virtual)
+
+            # Option to download result
             st.download_button(
-                label="📥 Download Processed Excel File",
-                data=output,
-                file_name="event_data_with_hour.xlsx",
+                label="📥 Download Result as Excel",
+                data=df_virtual.to_excel(index=False, engine='openpyxl'),
+                file_name="virtual_with_matched_nodes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
     except Exception as e:
-        st.error(f"⚠️ Error processing file: {e}")
+        st.error(f"⚠️ Error processing files: {e}")
+
 else:
-    st.info("Please upload an Excel file to begin.")
+    st.info("⬆ Please upload both Excel files to continue.")
